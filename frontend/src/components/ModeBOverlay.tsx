@@ -214,14 +214,14 @@ export const ModeBOverlay: React.FC<ModeBOverlayProps> = ({
                   marginBottom: '16px',
                 }}
               >
-                <span className="badge badge-ai">
-                  <span className="pulse-dot" style={{ background: '#818cf8' }} />
-                  AI-generated image (not live)
-                </span>
-
-                {result.is_demo && (
-                  <span className="badge badge-demo">
-                    DEMO MODE — SYNTHETIC LOCAL
+                {result.is_demo ? (
+                  <span className="badge badge-demo" style={{ fontWeight: 800, letterSpacing: '0.04em' }}>
+                    DEMO: NOT AI (SYNTHETIC LOCAL COMPOSITE)
+                  </span>
+                ) : (
+                  <span className="badge badge-ai">
+                    <span className="pulse-dot" style={{ background: '#818cf8' }} />
+                    AI-generated image (not live)
                   </span>
                 )}
 

@@ -9,6 +9,7 @@ import { AdminModal } from './components/AdminModal';
 import { GarmentGuideModal } from './components/GarmentGuideModal';
 import { ApiClient } from './api/client';
 import { Garment, TryOnResult, ProviderStatus } from './types';
+import { FramingAssessment, calculateStageDimensions } from './utils/coordinates';
 import {
   Video,
   VideoOff,
@@ -21,6 +22,9 @@ import {
   Camera,
   Activity,
   Layers,
+  UserCheck,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
@@ -47,6 +51,20 @@ export function App() {
   const { isLoaded: isLandmarkerLoaded, detectPose } = usePoseLandmarker();
   const [landmarks, setLandmarks] = useState<NormalizedLandmark[] | null>(null);
   const [showSkeletonDebug, setShowSkeletonDebug] = useState<boolean>(false);
+  const [fps, setFps] = useState<number>(0);
+  const [framing, setFraming] = useState<FramingAssessment>({
+    isValid: false,
+    message: null,
+    status: 'no_person',
+    confidence: 0,
+  });
+
+  // Responsive Stage Dimensions (matching video aspect ratio)
+  const mirrorContainerRef = useRef<HTMLDivElement | null>(null);
+  const [stageDimensions, setStageDimensions] = useState<{ width: number; height: number }>({
+    width: 1280,
+    height: 720,
+  });
 
   // Mode B State
   const [isModeBOpen, setIsModeBOpen] = useState<boolean>(false);
@@ -90,14 +108,50 @@ export function App() {
     loadCatalogData();
   }, [loadCatalogData]);
 
+  // Adjust Stage Dimensions whenever mirror section or video dimensions resize
+  const updateStageDimensions = useCallback(() => {
+    const container = mirrorContainerRef.current;
+    const video = videoRef.current;
+    if (!container) return;
+
+    const contW = container.clientWidth;
+    const contH = container.clientHeight;
+    const vidW = (video && video.videoWidth) ? video.videoWidth : 1280;
+    const vidH = (video && video.videoHeight) ? video.videoHeight : 720;
+
+    const fitted = calculateStageDimensions(contW, contH, vidW, vidH);
+    setStageDimensions({ width: fitted.width, height: fitted.height });
+  }, [videoRef]);
+
+  useEffect(() => {
+    window.addEventListener('resize', updateStageDimensions);
+    const observer = new ResizeObserver(() => updateStageDimensions());
+    if (mirrorContainerRef.current) {
+      observer.observe(mirrorContainerRef.current);
+    }
+    return () => {
+      window.removeEventListener('resize', updateStageDimensions);
+      observer.disconnect();
+    };
+  }, [updateStageDimensions]);
+
   // Frame processing loop for MediaPipe Pose Tracking
   const animFrameRef = useRef<number>();
   useEffect(() => {
     const loop = (timestamp: number) => {
-      if (cameraStatus === 'active' && videoRef.current && isLandmarkerLoaded) {
+      // Support test harness landmark injection for automated headless testing
+      const testLandmarks = (
+        window as unknown as { __VIRTUALFIT_TEST_LANDMARKS__?: NormalizedLandmark[] }
+      ).__VIRTUALFIT_TEST_LANDMARKS__;
+
+      if (testLandmarks) {
+        setLandmarks(testLandmarks);
+      } else if (cameraStatus === 'active' && videoRef.current && isLandmarkerLoaded) {
         const detected = detectPose(videoRef.current, timestamp);
         if (detected) {
           setLandmarks(detected);
+        } else {
+          setLandmarks(null);
         }
       }
       animFrameRef.current = requestAnimationFrame(loop);
@@ -125,6 +179,13 @@ export function App() {
     startCamera();
   };
 
+  // Reset Handler
+  const handleResetOutfit = () => {
+    setSelectedGarment(null);
+    setModeBResult(null);
+    setModeBOriginalSrc(null);
+  };
+
   // Mode B "Generate Realistic Fit" Handler
   const handleGenerateRealisticFit = async () => {
     if (cameraStatus !== 'active') {
@@ -142,12 +203,10 @@ export function App() {
     setModeBResult(null);
 
     try {
-      // 1. Capture snapshot blob from video element
       const blob = await captureFrameBlob();
       const originalUrl = URL.createObjectURL(blob);
       setModeBOriginalSrc(originalUrl);
 
-      // 2. Dispatch to backend inference adapter
       const result = await ApiClient.generateRealisticTryOn(blob, selectedGarment.id);
       setModeBResult(result);
     } catch (err: unknown) {
@@ -225,6 +284,54 @@ export function App() {
 
         {/* Status Indicators & Navigation Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Tracking Status Chip */}
+          {cameraStatus === 'active' && (
+            <div
+              className={`badge ${
+                framing.status === 'optimal'
+                  ? 'badge-live'
+                  : framing.status === 'step_back'
+                  ? 'badge-demo'
+                  : 'badge-ai'
+              }`}
+              style={{ fontSize: '11px' }}
+            >
+              {framing.status === 'optimal' ? (
+                <>
+                  <UserCheck size={13} />
+                  Person Detected
+                </>
+              ) : framing.status === 'step_back' ? (
+                <>
+                  <AlertTriangle size={13} />
+                  Move Back
+                </>
+              ) : (
+                <>
+                  <Activity size={13} />
+                  No Person
+                </>
+              )}
+            </div>
+          )}
+
+          {/* FPS Counter */}
+          {cameraStatus === 'active' && fps > 0 && (
+            <div
+              style={{
+                fontSize: '11px',
+                color: 'var(--accent-cyan)',
+                background: 'rgba(6, 182, 212, 0.1)',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                border: '1px solid rgba(6, 182, 212, 0.25)',
+                fontWeight: 600,
+              }}
+            >
+              {fps} FPS
+            </div>
+          )}
+
           {/* Provider / Demo Badge */}
           {providerStatus && (
             <div
@@ -278,8 +385,9 @@ export function App() {
 
       {/* Main Kiosk Viewport */}
       <main style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left: Interactive Virtual Mirror Viewport */}
+        {/* Left: Interactive Virtual Mirror Viewport with Symmetrical Letterboxing */}
         <section
+          ref={mirrorContainerRef}
           style={{
             flex: 1,
             position: 'relative',
@@ -290,30 +398,105 @@ export function App() {
             overflow: 'hidden',
           }}
         >
-          {/* Hidden/Active Video Feed */}
-          <video
-            ref={videoRef}
-            playsInline
-            muted
+          {/* Centered Symmetrical Stage matching video aspect ratio */}
+          <div
+            id="mirror-stage"
             style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              transform: 'scaleX(-1)', // Mirror image horizontally
-              display: cameraStatus === 'active' ? 'block' : 'none',
+              position: 'relative',
+              width: `${stageDimensions.width}px`,
+              height: `${stageDimensions.height}px`,
+              maxWidth: '100%',
+              maxHeight: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#000000',
+              boxShadow: '0 0 50px rgba(0, 0, 0, 0.9)',
+              overflow: 'hidden',
             }}
-          />
-
-          {/* Mode A Live Garment Overlay Canvas */}
-          {cameraStatus === 'active' && (
-            <GarmentWarpEngine
-              videoRef={videoRef}
-              landmarks={landmarks}
-              selectedGarment={selectedGarment}
-              isActive={cameraStatus === 'active'}
-              showSkeletonDebug={showSkeletonDebug}
+          >
+            {/* Webcam Video Stream (mirrored horizontally via scaleX(-1)) */}
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              onLoadedMetadata={updateStageDimensions}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'fill',
+                transform: 'scaleX(-1)', // Mirrored for natural mirror experience
+                display: cameraStatus === 'active' ? 'block' : 'none',
+              }}
             />
-          )}
+
+            {/* Mode A Live Garment Overlay Canvas (coordinates mapped with mirror transform) */}
+            {cameraStatus === 'active' && (
+              <GarmentWarpEngine
+                videoRef={videoRef}
+                landmarks={landmarks}
+                selectedGarment={selectedGarment}
+                isActive={cameraStatus === 'active'}
+                showSkeletonDebug={showSkeletonDebug}
+                onFramingChange={setFraming}
+                onFpsUpdate={setFps}
+              />
+            )}
+
+            {/* Framing Guidance Toast: "Step back so your shoulders and torso are visible" */}
+            {cameraStatus === 'active' && framing.message && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '72px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'rgba(245, 158, 11, 0.92)',
+                  color: '#090d16',
+                  padding: '8px 18px',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+                  zIndex: 25,
+                  backdropFilter: 'blur(8px)',
+                  animation: 'pulse 2s infinite',
+                }}
+              >
+                <AlertTriangle size={16} />
+                {framing.message}
+              </div>
+            )}
+
+            {/* Faint Body Outline Guide when framing needs adjustment */}
+            {cameraStatus === 'active' && !framing.isValid && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: '15% 25%',
+                  border: '2px dashed rgba(6, 182, 212, 0.25)',
+                  borderRadius: '24px',
+                  pointerEvents: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'rgba(6, 182, 212, 0.35)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  zIndex: 15,
+                }}
+              >
+                Fit Silhouette Inside Box
+              </div>
+            )}
+          </div>
 
           {/* Honest Mode A Badge Overlay */}
           {cameraStatus === 'active' && (
@@ -350,6 +533,7 @@ export function App() {
           {/* Skeleton Debug Toggle */}
           {cameraStatus === 'active' && (
             <button
+              id="skeleton-debug-toggle"
               onClick={() => setShowSkeletonDebug(!showSkeletonDebug)}
               style={{
                 position: 'absolute',
@@ -369,7 +553,7 @@ export function App() {
               }}
             >
               <Eye size={14} />
-              {showSkeletonDebug ? 'Hide Joints' : 'Debug Skeleton'}
+              {showSkeletonDebug ? 'Hide Skeleton' : 'Debug Skeleton'}
             </button>
           )}
 
@@ -520,6 +704,20 @@ export function App() {
                 <VideoOff size={16} />
                 Stop Camera
               </button>
+
+              {/* Reset Outfit Button */}
+              {selectedGarment && (
+                <button
+                  id="reset-outfit-button"
+                  onClick={handleResetOutfit}
+                  className="btn-secondary"
+                  style={{ minHeight: '44px' }}
+                  title="Clear garment overlay"
+                >
+                  <RotateCcw size={16} />
+                  Clear Garment
+                </button>
+              )}
 
               {/* Camera Switcher Dropdown (if multiple devices) */}
               {devices.length > 1 && (

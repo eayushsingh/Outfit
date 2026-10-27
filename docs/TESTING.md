@@ -59,13 +59,14 @@ $ npm test
  RUN  v1.6.1 /Users/ayush/Desktop/outfit/frontend
 
  ✓ src/test/client.test.ts (3)
+ ✓ src/test/coordinates.test.ts (10)
  ✓ src/test/camera.test.ts (4)
  ✓ src/test/catalog.test.tsx (3)
 
- Test Files  3 passed (3)
-      Tests  10 passed (10)
-   Start at  14:23:55
-   Duration  545ms
+ Test Files  4 passed (4)
+      Tests  20 passed (20)
+   Start at  14:59:02
+   Duration  564ms
 ```
 
 ### 2.2 TypeScript Strict Typecheck:
@@ -142,6 +143,22 @@ All saved to `docs/screenshots/`:
 - `06_admin_auth_gate.png` (60 KB) — Admin authentication gate
 - `07_admin_dashboard_unlocked.png` (64 KB) — Unlocked catalog dashboard
 - `08_mode_b_result.png` (72 KB) — Mode B try-on result with split slider
+
+#### Hardening & Acceptance Criteria Screenshots:
+- `c1_stage_1280x720.png` — Stage aspect ratio & centered letterboxing at 1280x720
+- `c1_stage_1920x1080.png` — Stage aspect ratio & centered letterboxing at 1920x1080 Full HD
+- `c1_stage_tablet_768x1024.png` — Stage aspect ratio on portrait tablet viewport
+- `c1_stage_phone_390x844.png` — Stage aspect ratio on portrait phone viewport
+- `c2_motion_1_center.png` — Garment anchored at center torso with shoulder midpoint and width
+- `c2_motion_2_closer_scaled.png` — Dynamic scaling as user steps closer
+- `c2_motion_3_tilted_rotation.png` — Natural rotation as shoulders tilt
+- `c2_motion_4_shifted_right.png` — Real-time lateral tracking follow-through
+- `c3_framing_step_back_toast.png` — Out-of-frame shoulder detection and floating guidance toast
+- `c4_debug_skeleton_aligned.png` — Debug skeleton rendering bones and glowing joints
+- `c5_garment_switched_jacket.png` — Instant garment switching without stale artifacts
+- `c5_garment_cleared.png` — Immediate overlay reset
+- `c7_mode_b_demo_honesty.png` — Mode B honest DEMO: NOT AI badge on synthetic output
+- `c8_camera_stopped_idle.png` — Clean camera track release and return to idle stage
 
 ---
 
