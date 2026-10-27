@@ -1,7 +1,7 @@
 import { Garment, GarmentCategory, TryOnResult, ProviderStatus } from '../types';
 
 export class ApiClient {
-  private static baseUrl = '/api';
+  private static baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '') + '/api';
 
   static async getCatalog(category?: GarmentCategory, search?: string): Promise<Garment[]> {
     const params = new URLSearchParams();

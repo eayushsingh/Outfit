@@ -81,17 +81,86 @@ export function App() {
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
   const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
 
+const DEFAULT_FALLBACK_GARMENTS: Garment[] = [
+  {
+    id: 'default-1',
+    name: 'Crimson Relaxed Athletic Tee',
+    category: 'tshirt',
+    description: 'Breathable moisture-wicking crimson tee designed for high mobility.',
+    image_url: '/garments/crimson_athletic_tee.jpg',
+    cutout_url: '/garments/crimson_athletic_tee_cutout.png',
+    anchor_hints: { shoulder_scale: 1.0, torso_offset_y: 0.0, aspect_ratio: 0.75 },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-2',
+    name: 'Rugged Denim Trucker Jacket',
+    category: 'jacket',
+    description: 'Classic heavyweight denim jacket with button placket and chest flap pockets.',
+    image_url: '/garments/denim_trucker_jacket.jpg',
+    cutout_url: '/garments/denim_trucker_jacket_cutout.png',
+    anchor_hints: { shoulder_scale: 1.12, torso_offset_y: 0.02, aspect_ratio: 0.75 },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-3',
+    name: 'Classic Navy Oxford Button-Down',
+    category: 'shirt',
+    description: 'Crisp 100% combed cotton oxford with structured collar and tailored silhouette.',
+    image_url: '/garments/navy_oxford_shirt.jpg',
+    cutout_url: '/garments/navy_oxford_shirt_cutout.png',
+    anchor_hints: { shoulder_scale: 1.05, torso_offset_y: 0.01, aspect_ratio: 0.75 },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-4',
+    name: 'Urban Stealth Heavyweight Hoodie',
+    category: 'hoodie',
+    description: '450 GSM French terry cotton hoodie with fleece lining and double-layered hood.',
+    image_url: '/garments/stealth_black_hoodie.jpg',
+    cutout_url: '/garments/stealth_black_hoodie_cutout.png',
+    anchor_hints: { shoulder_scale: 1.15, torso_offset_y: 0.03, aspect_ratio: 0.75 },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-5',
+    name: 'Heather Charcoal Crewneck Tee',
+    category: 'tshirt',
+    description: 'Pre-shrunk vintage combed cotton crewneck t-shirt with reinforced collar ribbing.',
+    image_url: '/garments/charcoal_crew_tee.jpg',
+    cutout_url: '/garments/charcoal_crew_tee_cutout.png',
+    anchor_hints: { shoulder_scale: 1.0, torso_offset_y: 0.0, aspect_ratio: 0.75 },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
   // Load Catalog and Provider Status on Mount
   const loadCatalogData = useCallback(async () => {
     try {
       setIsCatalogLoading(true);
       const items = await ApiClient.getCatalog();
-      setGarments(items);
-      if (items.length > 0 && !selectedGarment) {
-        setSelectedGarment(items[0]);
+      if (items && items.length > 0) {
+        setGarments(items);
+        if (!selectedGarment) {
+          setSelectedGarment(items[0]);
+        }
+      } else {
+        setGarments(DEFAULT_FALLBACK_GARMENTS);
+        if (!selectedGarment) {
+          setSelectedGarment(DEFAULT_FALLBACK_GARMENTS[0]);
+        }
       }
     } catch (e) {
-      console.error('Failed to load clothing catalog:', e);
+      console.warn('Backend catalog unreachable; using bundled sample garments:', e);
+      setGarments(DEFAULT_FALLBACK_GARMENTS);
+      if (!selectedGarment) {
+        setSelectedGarment(DEFAULT_FALLBACK_GARMENTS[0]);
+      }
     } finally {
       setIsCatalogLoading(false);
     }
